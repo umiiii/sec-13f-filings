@@ -87,5 +87,35 @@ bundle exec rails runner '
   end
 ' || echo "[railway-start] figi backfill failed, continuing anyway"
 
+echo "[railway-start] prefetching stock prices (8 req/min limit)..."
+bundle exec rails runner '
+  cusip_to_symbol = CusipSymbolMapping.where.not(symbol: [nil, ""]).pluck(:cusip, :symbol).to_h
+  used_cusips = Holding.where(shares_or_principal_amount_type: "sh", option_type: nil).distinct.pluck(:cusip)
+  symbols = used_cusips.map { |c| cusip_to_symbol[c] }.compact.uniq
+
+  already_cached = StockPrice.where(symbol: symbols).distinct.pluck(:symbol)
+  to_fetch = symbols - already_cached
+
+  if to_fetch.empty?
+    puts "[prices] all #{symbols.size} symbols already cached"
+  else
+    puts "[prices] fetching #{to_fetch.size} symbols (cached #{already_cached.size})"
+    client = YahooFinanceClient.new
+    from = Date.today - 365
+    to = Date.today
+
+    to_fetch.each_with_index do |symbol, i|
+      begin
+        closes = client.fetch_daily_closes(symbol, from: from, to: to)
+        StockPrice.bulk_upsert(symbol, closes) if closes.any?
+        puts "[prices] #{symbol}: #{closes.size} closes"
+      rescue => e
+        puts "[prices] #{symbol}: #{e.class}: #{e.message}"
+      end
+      sleep 8 if i < to_fetch.size - 1
+    end
+  end
+' || echo "[railway-start] price prefetch failed, continuing anyway"
+
 echo "[railway-start] starting foreman..."
 exec bundle exec foreman start -m web=1,worker=1,clock=1
