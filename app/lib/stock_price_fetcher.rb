@@ -72,6 +72,8 @@ class StockPriceFetcher
       next unless missing
 
       closes = safe_fetch(symbol, from: fetch_from, to: fetch_to)
+      sleep 0.15
+
       next if closes.blank?
 
       StockPrice.bulk_upsert(symbol, closes)
