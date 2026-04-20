@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -e
+
+echo "[railway-start] waiting for database..."
+attempts=0
+until bundle exec rails runner 'ActiveRecord::Base.connection.execute("SELECT 1")' >/dev/null 2>&1; do
+  attempts=$((attempts + 1))
+  if [ "$attempts" -ge 60 ]; then
+    echo "[railway-start] database did not become reachable after 60 attempts" >&2
+    exit 1
+  fi
+  sleep 2
+done
+echo "[railway-start] database reachable after ${attempts} attempt(s)"
+
+echo "[railway-start] running migrations..."
+bundle exec rails db:migrate
+
+echo "[railway-start] starting foreman..."
+exec bundle exec foreman start -m web=1,worker=1,clock=1

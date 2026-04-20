@@ -5,8 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "bundle exec foreman start -m web=1,worker=1,clock=1",
-    "preDeployCommand": ["bundle exec rails db:migrate"],
+    "startCommand": "bin/railway-start",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

@@ -29,6 +29,8 @@ COPY . .
 
 RUN SECRET_KEY_BASE=build-placeholder bundle exec rails assets:precompile
 
+RUN chmod +x bin/railway-start
+
 EXPOSE 3000
 
-CMD ["bundle", "exec", "foreman", "start", "-m", "web=1,worker=1,clock=1"]
+CMD ["bin/railway-start"]
