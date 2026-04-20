@@ -35,5 +35,57 @@ bundle exec rails runner '
   end
 ' || echo "[railway-start] seed step failed, continuing anyway"
 
+echo "[railway-start] backfilling cusip -> ticker mappings via openfigi..."
+bundle exec rails runner '
+  require "net/http"
+  require "json"
+
+  missing_cusips = Holding.where(shares_or_principal_amount_type: "sh", option_type: nil).
+    distinct.pluck(:cusip) -
+    CusipSymbolMapping.pluck(:cusip)
+
+  if missing_cusips.empty?
+    puts "[figi] no unmapped cusips"
+  else
+    puts "[figi] looking up #{missing_cusips.size} cusips"
+    uri = URI("https://api.openfigi.com/v3/mapping")
+
+    missing_cusips.each_slice(100) do |batch|
+      body = batch.map { |c| {idType: "ID_CUSIP", idValue: c} }
+      req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
+      req.body = body.to_json
+      resp = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) { |h| h.request(req) }
+
+      unless resp.is_a?(Net::HTTPSuccess)
+        puts "[figi] http #{resp.code}: #{resp.body[0..200]}"
+        sleep 5
+        next
+      end
+
+      results = JSON.parse(resp.body)
+      now = Time.current
+      rows = results.each_with_index.map do |r, i|
+        hit = r["data"]&.first
+        next unless hit && hit["ticker"]
+        {
+          cusip: batch[i],
+          symbol: hit["ticker"],
+          name: hit["name"],
+          exchange: hit["exchCode"],
+          created_at: now,
+          updated_at: now
+        }
+      end.compact
+
+      CusipSymbolMapping.upsert_all(rows, unique_by: :cusip) if rows.any?
+      puts "[figi] batch mapped #{rows.size}/#{batch.size}"
+      sleep 1
+    end
+
+    CompanyCusipLookup.refresh!
+    puts "[figi] done, refreshed company_cusip_lookups"
+  end
+' || echo "[railway-start] figi backfill failed, continuing anyway"
+
 echo "[railway-start] starting foreman..."
 exec bundle exec foreman start -m web=1,worker=1,clock=1
