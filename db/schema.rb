@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2021_03_27_205234) do
+ActiveRecord::Schema.define(version: 2026_04_20_000001) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_trgm"
@@ -77,6 +77,15 @@ ActiveRecord::Schema.define(version: 2021_03_27_205234) do
     t.datetime "updated_at", precision: 6, null: false
     t.index ["cusip", "thirteen_f_id"], name: "index_holdings_on_cusip_and_thirteen_f_id"
     t.index ["thirteen_f_id"], name: "index_holdings_on_thirteen_f_id"
+  end
+
+  create_table "stock_prices", force: :cascade do |t|
+    t.text "symbol", null: false
+    t.date "date", null: false
+    t.decimal "close", precision: 15, scale: 4
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["symbol", "date"], name: "index_stock_prices_on_symbol_and_date", unique: true
   end
 
   create_table "thirteen_fs", force: :cascade do |t|

@@ -56,6 +56,18 @@ meta_description "#{@filing.name} holdings disclosure for #{@filing.qq_yyyy}"
         <th class="bg-white text-sm font-medium text-gray-500 uppercase">Sole</th>
         <th class="bg-white text-sm font-medium text-gray-500 uppercase">Shared</th>
         <th class="bg-white text-sm font-medium text-gray-500 uppercase">None</th>
+        <th class="bg-white text-sm font-medium text-gray-500 uppercase">
+          Price Filed
+          <div class="text-xs normal-case text-gray-400"><%= mdy(@filing.date_filed) %></div>
+        </th>
+        <th class="bg-white text-sm font-medium text-gray-500 uppercase">
+          Price As-Of
+          <div class="text-xs normal-case text-gray-400"><%= mdy(@filing.report_date) %></div>
+        </th>
+        <th class="bg-white text-sm font-medium text-gray-500 uppercase">
+          Price Now
+          <div class="text-xs normal-case text-gray-400"><%= mdy(Date.current) %></div>
+        </th>
       </tr>
     </thead>
     <tbody class="font-mono">

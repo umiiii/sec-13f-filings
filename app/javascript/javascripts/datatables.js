@@ -40,6 +40,21 @@ $(function() {
     render: $.fn.dataTable.render.number(',', '.')
   };
 
+  let priceOptions = {
+    createdCell: addClassToTdNotTh('text-right'),
+    orderSequence: ['desc', 'asc'],
+    render: function(price, type, row) {
+      if (price == null) return '';
+      if (type === 'display') {
+        return '$' + Number(price).toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
+      }
+      return price;
+    }
+  };
+
   let holdingsPctOptions = {
     createdCell: addClassToTdNotTh('text-right'),
     orderSequence: ['desc', 'asc'],
@@ -185,7 +200,10 @@ $(function() {
       otherManagerOptions,
       numberOptions,
       numberOptions,
-      numberOptions
+      numberOptions,
+      priceOptions,
+      priceOptions,
+      priceOptions
     ],
     columnDefs: [
       {targets: [10, 11, 12], width: '8rem', className: 'truncate'}

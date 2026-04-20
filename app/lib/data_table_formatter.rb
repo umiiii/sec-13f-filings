@@ -21,10 +21,14 @@ class DataTableFormatter
   end
 
   def self.thirteen_f_to_detailed_datatable(thirteen_f)
+    prices_by_cusip = StockPriceFetcher.prices_for_filing(thirteen_f)
+
     rows = thirteen_f.holdings.descend_by_value.map do |h|
       if h.value
         pct_of_total = 100 * h.value.to_f / thirteen_f.holdings_value_calculated.to_f
       end
+
+      prices = prices_by_cusip[h.cusip] || {}
 
       [
         h.issuer_name,
@@ -39,7 +43,10 @@ class DataTableFormatter
         h.other_manager,
         h.voting_authority_sole&.to_i,
         h.voting_authority_shared&.to_i,
-        h.voting_authority_none&.to_i
+        h.voting_authority_none&.to_i,
+        format_price(prices[:filed]),
+        format_price(prices[:as_of]),
+        format_price(prices[:now])
       ]
     end
 
@@ -161,6 +168,11 @@ class DataTableFormatter
   end
 
   private
+
+  def self.format_price(price)
+    return unless price
+    price.to_f.round(2)
+  end
 
   def self.value_likely_overstated_by_1000?(holding, median_per_share)
     return unless median_per_share && holding.value_per_share && holding.option_type.blank?
