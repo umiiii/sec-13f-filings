@@ -50,7 +50,7 @@ bundle exec rails runner '
     puts "[figi] looking up #{missing_cusips.size} cusips"
     uri = URI("https://api.openfigi.com/v3/mapping")
 
-    missing_cusips.each_slice(100) do |batch|
+    missing_cusips.each_slice(10) do |batch|
       body = batch.map { |c| {idType: "ID_CUSIP", idValue: c} }
       req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
       req.body = body.to_json
