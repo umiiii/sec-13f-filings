@@ -16,5 +16,24 @@ echo "[railway-start] database reachable after ${attempts} attempt(s)"
 echo "[railway-start] running migrations..."
 bundle exec rails db:migrate
 
+echo "[railway-start] seeding demo manager (idempotent)..."
+bundle exec rails runner '
+  target_cik = "0002045724"
+  if ThirteenF.where(cik: target_cik).any?
+    puts "[seed] CIK #{target_cik} already present, skipping."
+  else
+    puts "[seed] importing filings for CIK #{target_cik}..."
+    periods = [
+      {year: 2025, quarter: 1},
+      {year: 2025, quarter: 2},
+      {year: 2025, quarter: 3},
+      {year: 2025, quarter: 4},
+      {year: 2026, quarter: 1}
+    ]
+    MinimalDbSeeder.new(ciks: [target_cik], periods: periods).seed_minimal_db!
+    puts "[seed] done"
+  end
+' || echo "[railway-start] seed step failed, continuing anyway"
+
 echo "[railway-start] starting foreman..."
 exec bundle exec foreman start -m web=1,worker=1,clock=1
