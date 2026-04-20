@@ -18,12 +18,11 @@ bundle exec rails db:migrate
 
 TARGET_CIK="0002045724"
 
-echo "[railway-start] seeding demo manager (idempotent)..."
+echo "[railway-start] seeding demo manager + enqueueing backfill..."
 bundle exec rails runner '
   target_cik = "'"$TARGET_CIK"'"
-  if ThirteenF.where(cik: target_cik).any?
-    puts "[seed] CIK #{target_cik} already present, skipping."
-  else
+
+  if ThirteenF.where(cik: target_cik).none?
     puts "[seed] importing filings for CIK #{target_cik}..."
     periods = [
       {year: 2025, quarter: 1},
@@ -33,72 +32,17 @@ bundle exec rails runner '
       {year: 2026, quarter: 1}
     ]
     MinimalDbSeeder.new(ciks: [target_cik], periods: periods).seed_minimal_db!
-    puts "[seed] done"
+  else
+    puts "[seed] CIK #{target_cik} already present, skipping import."
+  end
+
+  unless Delayed::Job.where("handler LIKE ?", "%DemoCikBackfill%").exists?
+    DemoCikBackfill.delay(priority: 50).run!(target_cik)
+    puts "[seed] queued DemoCikBackfill job"
+  else
+    puts "[seed] DemoCikBackfill job already queued, skipping."
   end
 ' || echo "[railway-start] seed step failed, continuing anyway"
-
-# Scope the expensive backfills to the seeded CIK only; other managers'
-# holdings are handled lazily (and we avoid blocking boot for hours when
-# clockwork has imported thousands of placeholders since last deploy).
-echo "[railway-start] queueing async backfill (figi + prices) for CIK $TARGET_CIK..."
-nohup bundle exec rails runner '
-  $stdout.sync = true
-  require "net/http"
-  require "json"
-
-  target_cik = "'"$TARGET_CIK"'"
-  cusips = Holding.joins(:thirteen_f).
-    where(thirteen_fs: {cik: target_cik}).
-    where(shares_or_principal_amount_type: "sh", option_type: nil).
-    distinct.pluck(:cusip)
-
-  missing = cusips - CusipSymbolMapping.pluck(:cusip)
-  if missing.any?
-    puts "[bg-figi] mapping #{missing.size} cusips"
-    uri = URI("https://api.openfigi.com/v3/mapping")
-    missing.each_slice(10) do |batch|
-      body = batch.map { |c| {idType: "ID_CUSIP", idValue: c} }
-      req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
-      req.body = body.to_json
-      resp = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) { |h| h.request(req) }
-      next unless resp.is_a?(Net::HTTPSuccess)
-      now = Time.current
-      rows = JSON.parse(resp.body).each_with_index.map do |r, i|
-        hit = r["data"]&.first
-        next unless hit && hit["ticker"]
-        {cusip: batch[i], symbol: hit["ticker"], name: hit["name"], exchange: hit["exchCode"], created_at: now, updated_at: now}
-      end.compact
-      CusipSymbolMapping.upsert_all(rows, unique_by: :cusip) if rows.any?
-      sleep 1
-    end
-    CompanyCusipLookup.refresh!
-    puts "[bg-figi] done"
-  end
-
-  cusip_to_symbol = CusipSymbolMapping.where(cusip: cusips).pluck(:cusip, :symbol).to_h
-  symbols = cusips.map { |c| cusip_to_symbol[c] }.compact.uniq
-  already_cached = StockPrice.where(symbol: symbols).distinct.pluck(:symbol)
-  to_fetch = symbols - already_cached
-  if to_fetch.any?
-    puts "[bg-prices] fetching #{to_fetch.size} symbols"
-    client = YahooFinanceClient.new
-    from = Date.today - 365
-    to = Date.today
-    to_fetch.each_with_index do |symbol, i|
-      begin
-        closes = client.fetch_daily_closes(symbol, from: from, to: to)
-        StockPrice.bulk_upsert(symbol, closes) if closes.any?
-        puts "[bg-prices] #{symbol}: #{closes.size}"
-      rescue => e
-        puts "[bg-prices] #{symbol}: #{e.message}"
-      end
-      sleep 8 if i < to_fetch.size - 1
-    end
-    puts "[bg-prices] done"
-  else
-    puts "[bg-prices] nothing to fetch"
-  end
-' > /tmp/backfill.log 2>&1 &
 
 echo "[railway-start] starting foreman..."
 exec bundle exec foreman start -m web=1,worker=1,clock=1
