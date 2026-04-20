@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
 set -e
 
+echo "[railway-start] DATABASE_URL host=$(echo "$DATABASE_URL" | sed -E 's#.*@([^:/]+).*#\1#')"
+echo "[railway-start] DNS lookup:"
+getent ahosts "$(echo "$DATABASE_URL" | sed -E 's#.*@([^:/]+).*#\1#')" || echo "[railway-start] getent failed"
+
 echo "[railway-start] waiting for database..."
 attempts=0
-until bundle exec rails runner 'ActiveRecord::Base.connection.execute("SELECT 1")' >/dev/null 2>&1; do
+until output=$(bundle exec rails runner 'ActiveRecord::Base.connection.execute("SELECT 1"); puts "ok"' 2>&1) && [[ "$output" == *"ok"* ]]; do
   attempts=$((attempts + 1))
-  if [ "$attempts" -ge 60 ]; then
-    echo "[railway-start] database did not become reachable after 60 attempts" >&2
+  if [ "$attempts" -ge 30 ]; then
+    echo "[railway-start] giving up after 30 attempts. last error:" >&2
+    echo "$output" >&2
     exit 1
   fi
-  sleep 2
+  if [ $((attempts % 5)) -eq 1 ]; then
+    echo "[railway-start] attempt ${attempts} failed: $(echo "$output" | head -c 300)"
+  fi
+  sleep 3
 done
 echo "[railway-start] database reachable after ${attempts} attempt(s)"
 
