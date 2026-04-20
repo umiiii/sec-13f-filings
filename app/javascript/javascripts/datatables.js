@@ -206,7 +206,8 @@ $(function() {
       priceOptions
     ],
     columnDefs: [
-      {targets: [10, 11, 12], width: '8rem', className: 'truncate'}
+      {targets: [10, 11, 12], width: '8rem', className: 'truncate'},
+      {targets: [13, 14, 15], width: '6rem'}
     ],
     dom: 'l<"w-52"f>rtip<"mt-6 sm:mt-0"B>'
   });
