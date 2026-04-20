@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["nodejs_18", "yarn", "python3", "gcc", "gnumake"]
+aptPkgs = ["python3", "build-essential"]
 
 [variables]
-PYTHON = "python3"
+PYTHON = "/usr/bin/python3"
