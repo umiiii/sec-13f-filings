@@ -7,11 +7,15 @@ ENV LANG=C.UTF-8 \
     RAILS_ENV=production \
     NODE_ENV=production
 
-RUN curl -fsSL https://deb.nodesource.com/setup_14.x | bash - \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends nodejs postgresql-client \
-    && npm install -g yarn@1.22.22 \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_VERSION=14.21.3
+RUN curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+    && tar -xJf "node-v${NODE_VERSION}-linux-x64.tar.xz" -C /usr/local --strip-components=1 --no-same-owner \
+    && rm "node-v${NODE_VERSION}-linux-x64.tar.xz" \
+    && npm install -g yarn@1.22.22
 
 WORKDIR /app
 
