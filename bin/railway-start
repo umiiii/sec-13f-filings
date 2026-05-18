@@ -36,6 +36,38 @@ bundle exec rails runner '
     puts "[seed] CIK #{target_cik} already present, skipping import."
   end
 
+  # Always refresh recent filings for this CIK from SEC EDGAR atom feed.
+  begin
+    sec_client = SecClient.new
+    recent = sec_client.latest_thirteen_f_filings(filed_since: 30.days.ago.to_date)
+    my_recent = recent.select { |r| r.cik.to_s.strip.rjust(10, "0") == target_cik }
+    existing = ThirteenF.where(external_id: my_recent.map(&:external_id)).pluck(:external_id).to_set
+    new_rows = my_recent.reject { |r| existing.include?(r.external_id) }.map do |row|
+      now = Time.current
+      {
+        external_id: row.external_id,
+        cik: row.cik,
+        name: row.company_name,
+        form_type: row.form_type,
+        date_filed: row.date_filed,
+        directory_url: row.directory_url,
+        filing_year: row.date_filed.year,
+        filing_quarter: (row.date_filed.month - 1) / 3 + 1,
+        created_at: now,
+        updated_at: now
+      }
+    end
+    if new_rows.any?
+      ThirteenF.insert_all(new_rows, returning: false)
+      puts "[refresh] imported #{new_rows.size} new filings"
+    else
+      puts "[refresh] no new filings for CIK #{target_cik}"
+    end
+    ThirteenF.process_unprocessed_filings!(ciks: [target_cik], refresh_views: true)
+  rescue => e
+    puts "[refresh] failed: #{e.class}: #{e.message}"
+  end
+
   unless Delayed::Job.where("handler LIKE ?", "%DemoCikBackfill%").exists?
     DemoCikBackfill.delay(priority: 50).run!(target_cik)
     puts "[seed] queued DemoCikBackfill job"
