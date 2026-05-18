@@ -75,7 +75,7 @@ class SecClient
     results = []
 
     max_pages.times do
-      doc = Nokogiri::XML(HTTParty.get(url, query: query_params).body)
+      doc = Nokogiri::XML(HTTParty.get(url, query: query_params, headers: request_headers).body)
 
       doc.css("entry").each do |e|
         date_filed = Date.parse(e.at("updated").text)
